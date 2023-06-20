@@ -1,0 +1,104 @@
+---
+title: "LST imputation: Exploratory analysis"
+author: "Carles Milà"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', 
+                      message = F, warnings = F, echo = F)
+
+library("targets")
+library("tidyverse")
+library("viridis")
+library("RColorBrewer")
+library("ggcorrplot")
+library("lares")
+library("colorspace")
+```
+
+# Correlation matrix of predictors
+
+```{r cormat, fig.height=8, fig.width=9}
+tar_load("modis_train")
+terra_train <- read_csv(gsub("year", "2018", modis_train$LST_terra_day), n_max=1000000) %>%
+  dplyr::filter(split=="train") %>%
+  dplyr::select(-split)
+set.seed(1234)
+isamples <- sample(1:nrow(terra_train), 10000)
+terra_train <- terra_train[isamples,]
+terra_train <- dplyr::select(terra_train, where(is.numeric))
+cormat <- cor(terra_train, method="spearman")
+ggcorrplot(cormat, hc.order = TRUE, outline.col = "white", 
+           title="Spearman correlation matrix (100000 random samples)")
+```
+
+# Correlation rank: Terra day 2018
+
+```{r corrank terra 2018}
+corr_var(terra_train, dayLST_terra, method = "spearman", top = 10) 
+rm("terra_train")
+```
+
+# Correlation rank: Terra night 2019
+
+```{r corrank terra night 2019}
+terra_train <- read_csv(gsub("year", "2019", modis_train$LST_terra_night), n_max=1000000) %>%
+  dplyr::filter(split=="train") %>%
+  dplyr::select(-split)
+set.seed(1234)
+isamples <- sample(1:nrow(terra_train), 10000)
+terra_train <- terra_train[isamples,]
+terra_train <- dplyr::select(terra_train, where(is.numeric))
+corr_var(terra_train, nightLST_terra, method = "spearman", top = 10) 
+rm("terra_train")
+```
+
+# Correlation rank: Aqua day 2020
+
+```{r corrank aqua day 2020}
+aqua_train <- read_csv(gsub("year", "2020", modis_train$LST_aqua_day), n_max=1000000) %>%
+  dplyr::filter(split=="train") %>%
+  dplyr::select(-split)
+set.seed(1234)
+isamples <- sample(1:nrow(aqua_train), 10000)
+aqua_train <- aqua_train[isamples,]
+aqua_train <- dplyr::select(aqua_train, where(is.numeric))
+corr_var(aqua_train, dayLST_aqua, method = "spearman", top = 10) 
+rm("aqua_train")
+```
+
+# Correlation rank: Aqua night 2018
+
+```{r corrank aqua night 2019}
+aqua_train <- read_csv(gsub("year", "2018", modis_train$LST_aqua_night), n_max=1000000) %>%
+  dplyr::filter(split=="train") %>%
+  dplyr::select(-split)
+set.seed(1234)
+isamples <- sample(1:nrow(aqua_train), 10000)
+aqua_train <- aqua_train[isamples,]
+aqua_train <- dplyr::select(aqua_train, where(is.numeric))
+corr_var(aqua_train, nightLST_aqua, method = "spearman", top = 10) 
+rm("aqua_train")
+```
+
+# Gap train/test partition
+
+```{r partition}
+tar_load("cat")
+cat <- read_rds(cat)
+gapsplit <- read_rds("database/split_areas.rds")
+tsamp <- read_rds("database/split_indicators.rds") %>%
+  dplyr::filter(date == as.Date("2018-01-01"))
+gapsplit$use <- ifelse(gapsplit$gapID %in% tsamp$gapID, "Test", "Train")
+gapsplit <- st_intersection(gapsplit, cat)
+ggplot(gapsplit) +
+  geom_sf(aes(fill=use), alpha = 0.8) +
+  scale_fill_discrete_qualitative(palette = "Cold") +
+  theme_bw() +
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  labs(fill = "")
+```

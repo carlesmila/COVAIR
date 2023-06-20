@@ -1,0 +1,353 @@
+---
+title: "LST imputation: Results"
+author: "Carles Milà"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', fig.width = 9, 
+                      fig.height = 6, message = F, warnings = F, echo = F)
+
+library("stars")
+library("tidyverse")
+library("colorspace")
+library("knitr")
+set.seed(1234)
+```
+
+## Model performance
+
+```{r model performance}
+quality_files <- list.files("outputs/LST_imp", "*.csv", full.names = T)
+quality_files <- quality_files[grepl("modlst", quality_files)]
+quality_files <- map_df(quality_files, read_csv) %>%
+  pivot_wider(names_from = "method", values_from = c("rmse", "r2"))
+kable(quality_files, digits=3)
+```
+
+## Variable importance
+
+```{r varimp}
+read_varimp <- function(satellite, time, year){
+  vimp <- read_csv(paste0("outputs/LST_imp/varimplst_", satellite, time, "_", year, ".csv"))
+  vimp$Sattime <- paste0(satellite, time)
+  vimp$Year <- year
+  vimp
+}
+varimp <- bind_rows(read_varimp("terra", "day", "2018"),
+                    read_varimp("aqua", "day", "2018"),
+                    read_varimp("terra", "night", "2018"),
+                    read_varimp("aqua", "night", "2018"),
+                    read_varimp("terra", "day", "2019"),
+                    read_varimp("aqua", "day", "2019"),
+                    read_varimp("terra", "night", "2019"),
+                    read_varimp("aqua", "night", "2019"),
+                    read_varimp("terra", "day", "2020"),
+                    read_varimp("aqua", "day", "2020"),
+                    read_varimp("terra", "night", "2020"),
+                    read_varimp("aqua", "night", "2020"))
+                    
+ggplot(varimp, aes(x=rowname, y=Overall, color=Year, fill=Year)) +
+  geom_col(position = "dodge2", alpha = 0.1) +
+  facet_wrap(~Sattime, scales = "free_y") + 
+  scale_fill_discrete_qualitative(palette = "Cold") +
+  scale_colour_discrete_qualitative(palette = "Cold") +
+  theme_light() +
+  ylab("Variable importance (scaled to 0-100)") +
+  coord_flip() +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.y = element_blank(), 
+    legend.position = "bottom")
+```
+
+
+## Terra day
+
+### 2018
+
+```{r terra day 2018}
+# Read original and imputed data
+original <- read_rds("database/original/2018/lst_terra.rds")["dayLST_terra"] 
+imputed <- read_rds("outputs/LST_imp/implst_terraday_2018.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10) +
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Terra day LST imputation for 4 random days") 
+```
+
+### 2019
+
+```{r terra day 2019}
+# Read original and imputed data
+original <- read_rds("database/original/2019/lst_terra.rds")["dayLST_terra"] 
+imputed <- read_rds("outputs/LST_imp/implst_terraday_2019.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Terra day LST imputation for 4 random days") 
+```
+
+### 2020
+
+```{r terra day 2020}
+# Read original and imputed data
+original <- read_rds("database/original/2020/lst_terra.rds")["dayLST_terra"] 
+imputed <- read_rds("outputs/LST_imp/implst_terraday_2020.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Terra day LST imputation for 4 random days") 
+```
+
+
+## Terra night
+
+### 2018
+
+```{r terra night 2018}
+# Read original and imputed data
+original <- read_rds("database/original/2018/lst_terra.rds")["nightLST_terra"] 
+imputed <- read_rds("outputs/LST_imp/implst_terranight_2018.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Terra night LST imputation for 4 random days") 
+```
+
+### 2019
+
+```{r terra night 2019}
+# Read original and imputed data
+original <- read_rds("database/original/2019/lst_terra.rds")["nightLST_terra"] 
+imputed <- read_rds("outputs/LST_imp/implst_terranight_2019.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Terra night LST imputation for 4 random days") 
+```
+
+### 2020
+
+```{r terra night 2020}
+# Read original and imputed data
+original <- read_rds("database/original/2020/lst_terra.rds")["nightLST_terra"] 
+imputed <- read_rds("outputs/LST_imp/implst_terranight_2020.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Terra night LST imputation for 4 random days") 
+```
+
+
+## Aqua day
+
+### 2018
+
+```{r aqua day 2018}
+# Read original and imputed data
+original <- read_rds("database/original/2018/lst_aqua.rds")["dayLST_aqua"] 
+imputed <- read_rds("outputs/LST_imp/implst_aquaday_2018.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Aqua day LST imputation for 4 random days") 
+```
+
+### 2019
+
+```{r aqua day 2019}
+# Read original and imputed data
+original <- read_rds("database/original/2019/lst_aqua.rds")["dayLST_aqua"] 
+imputed <- read_rds("outputs/LST_imp/implst_aquaday_2019.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Aqua day LST imputation for 4 random days") 
+```
+
+### 2020
+
+```{r aqua day 2020}
+# Read original and imputed data
+original <- read_rds("database/original/2020/lst_aqua.rds")["dayLST_aqua"] 
+imputed <- read_rds("outputs/LST_imp/implst_aquaday_2020.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Aqua day LST imputation for 4 random days") 
+```
+
+## Aqua night
+
+### 2018
+
+```{r aqua night 2018}
+# Read original and imputed data
+original <- read_rds("database/original/2018/lst_aqua.rds")["nightLST_aqua"] 
+imputed <- read_rds("outputs/LST_imp/implst_aquanight_2018.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Aqua night LST imputation for 4 random days") 
+```
+
+### 2019
+
+```{r aqua night 2019}
+# Read original and imputed data
+original <- read_rds("database/original/2019/lst_aqua.rds")["nightLST_aqua"] 
+imputed <- read_rds("outputs/LST_imp/implst_aquanight_2019.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Aqua night LST imputation for 4 random days") 
+```
+
+### 2020
+
+```{r aqua night 2020}
+# Read original and imputed data
+original <- read_rds("database/original/2020/lst_aqua.rds")["nightLST_aqua"] 
+imputed <- read_rds("outputs/LST_imp/implst_aquanight_2020.rds")
+
+# Draw a sample of 4 images
+imgs <- sample(1:length(st_get_dimension_values(original, 3)), 4)
+plotdata <- c(original[,,,imgs], imputed[,,,imgs], along=4) %>%
+  st_set_dimensions(4, names="product", values = c("original", "imputed"))
+
+# Plot
+ggplot() +
+  geom_stars(data=plotdata) +
+  facet_grid(product ~ date) +
+  scale_fill_continuous_diverging("Blue-Red 2", na.value = "#FFFFFF00", mid = 10)+
+  theme_bw() +
+  theme(legend.position = "bottom", axis.text = element_blank(),
+        axis.ticks = element_blank(), aspect.ratio=1, panel.grid=element_blank()) +
+  labs(x="", y="", fill = "ºC", title = "Aqua night LST imputation for 4 random days") 
+```

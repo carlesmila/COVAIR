@@ -1,0 +1,320 @@
+---
+title: "Predictors report"
+author: "Carles Milà"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', echo=F)
+
+library("targets")
+library("tidyverse")
+library("stars")
+library("viridis")
+library("RColorBrewer")
+library("sf")
+tar_load("cat")
+cat <- read_rds(cat)
+```
+
+# Spatial predictors
+
+## Coordinates
+
+```{r coords, fig.height=3, fig.width=7}
+tar_load("coords")
+coords <- read_rds(coords)
+par(mfrow=c(1,2))
+plot(coords[1,,], breaks = "equal", col=viridis(8), main="x", 
+     key.pos = NULL, reset = FALSE, add.geom=cat)
+plot(coords[2,,], breaks = "equal", col=viridis(8), main="y", 
+     key.pos = NULL, reset = FALSE, add.geom=cat)
+par(mfrow=c(1,1))
+rm("coords")
+```
+
+## Elevation
+
+```{r dem, fig.height=3, fig.width=5}
+tar_load("terrain")
+terrain <- read_rds(terrain)
+plot(terrain[1], breaks = "equal", col = terrain.colors(10), main="", add.geom=cat)
+```
+
+## Slope
+
+```{r slope, fig.height=3, fig.width=5}
+plot(terrain[2], breaks = "equal", col = terrain.colors(10), main="", add.geom=cat)
+```
+
+## Aspect
+
+```{r aspect, fig.height=3, fig.width=5}
+plot(terrain[3], breaks = "equal", col = terrain.colors(10), main="", add.geom=cat)
+rm("terrain")
+```
+
+## Impervious density (IMD)
+
+```{r imd, fig.height=3, fig.width=5}
+tar_load("imd")
+imd <- read_rds(imd)
+plot(imd, breaks ="equal", main="", col = heat.colors(10, rev=T), add.geom=cat)
+rm("imd")
+```
+
+## Tree Cover Density (TCD)
+
+```{r tcd, fig.height=3, fig.width=5}
+tar_load("tcd")
+tcd <- read_rds(tcd)
+plot(tcd, breaks ="equal", main="", col=brewer.pal(8, "Greens"), add.geom=cat)
+rm("tcd")
+```
+
+## Distance to coast
+
+```{r coast, fig.height=3, fig.width=5}
+tar_load("coast")
+coast <- read_rds(coast)
+plot(coast, breaks ="equal", main="", col=rev(brewer.pal(8, "YlGnBu")), 
+     add.geom=cat)
+rm("coast")
+```
+
+## Land use - Land cover
+
+```{r lulc, fig.height=3, fig.width=5}
+tar_load("lulc")
+lulc <- read_rds(lulc)
+plot(lulc["agriculture",,], breaks ="equal", main="", 
+     col=brewer.pal(5, "Oranges"), add.geom=cat)
+rm("lulc")
+```
+
+## Industrial point sources
+
+```{r psources`, fig.height=3, fig.width=5}
+tar_load("psources")
+psources <- read_rds(psources)
+plot(psources[1,,], breaks ="equal", main="", 
+     col=brewer.pal(8, "Oranges"), add.geom=cat)
+rm("psources")
+```
+
+## Population denisty
+
+```{r popu, fig.height=3, fig.width=5}
+tar_load("popu")
+popu <- read_rds(popu)
+plot(popu, breaks = c(0, 1, 10, 50, 100, 4427), main="",
+     col=mako(5), add.geom=cat)
+rm("popu")
+```
+
+## Road density
+
+```{r roaddens, fig.height=3, fig.width=5}
+tar_load("roaddens")
+roaddens <- read_rds(roaddens)
+plot(roaddens[3,,], col=magma(7), breaks = c(0,1,10,50,100,200,500,1200),
+     main="", add.geom=cat)
+rm("roaddens")
+```
+
+# Temporal predictors
+
+# Spatio-temporal predictors
+
+## NDVI
+
+```{r ndvi, fig.height=3, fig.width=9}
+tar_load("ndvi")
+ndvi <- read_rds(ndvi$ndvi18)
+plot(ndvi[,,,1:4], col=brewer.pal(8, "Greens"), main="", 
+     mfrow=c(1,4), add.geom=cat)
+rm("ndvi")
+```
+
+## NTLI
+
+```{r ntli, fig.height=3, fig.width=9}
+tar_load("ntli")
+ntli <- read_rds(ntli$ntli18)
+plot(ntli, col=viridis(8), main="", mfrow=c(1,3), add.geom=cat)
+rm("ntli")
+```
+
+# Reanalysis predictors
+
+## ERA5
+
+```{r era5 rean, fig.width=9, fig.height=2}
+tar_load("era5rean")
+era5rean <- read_rds(era5rean$era5rean18)
+par(mfrow=c(1,2))
+plot(era5rean[1,,,1], col=viridis(8), main="Mean sea level pressure", 
+     key.pos = NULL, reset = FALSE, add.geom=cat)
+plot(era5rean[2,,,1], col=viridis(8), main="Planetary boundary height", 
+     key.pos = NULL, reset = FALSE, add.geom=cat)
+par(mfrow=c(1,1))
+rm("era5rean")
+```
+
+## ERA5Land
+
+```{r era5land rean, fig.width=9, fig.height=2}
+tar_load("era5land")
+era5land <- read_rds(era5land$era5land18)
+par(mfrow=c(1,3))
+plot(era5land[2,,,1], col=viridis(8), main="wind u component", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,3))
+plot(era5land[3,,,1], col=viridis(8), main="wind v component", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,3))
+plot(era5land[4,,,1], col=viridis(5), main="Total precipitation", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,3))
+par(mfrow=c(1,1))
+par(mfrow=c(1,4))
+plot(era5land[1,,,1], col=viridis(8), main="average temperature", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,3))
+plot(era5land[5,,,1], col=viridis(8), main="minimum temperature", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,3))
+plot(era5land[6,,,1], col=viridis(8), main="maximum temperature", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,3))
+plot(era5land[10,,,1], col=viridis(8), main="skin temperature (10h)", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,3))
+par(mfrow=c(1,1))
+rm("era5land")
+```
+
+## CAMSglobal
+
+```{r CAMSglobal, fig.width=8, fig.height=3}
+tar_load("camsglobal")
+camsglobal <- read_rds(camsglobal$camsglobal18)
+par(mfrow=c(1,4))
+plot(camsglobal[2,,,1], col=viridis(8), main="AOD550 9h", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(camsglobal[1,,,1], col=viridis(8), main="AOD550 12h", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(camsglobal[3,,,1], col=viridis(8), main="NO2 12h", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(camsglobal[4,,,1], col=viridis(5), main="O3 12h", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+par(mfrow=c(1,1))
+rm("camsglobal")
+```
+
+## CAMSrean
+
+```{r CAMSrean, fig.width=8, fig.height=3}
+tar_load("camsrean")
+camsrean <- read_rds(camsrean$camsrean18)
+par(mfrow=c(1,4))
+plot(camsrean[1,,,1], col=viridis(8), main="PM25", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(camsrean[2,,,1], col=viridis(8), main="PM10", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(camsrean[3,,,1], col=viridis(8), main="NO2", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(camsrean[4,,,1], col=viridis(5), main="O3", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+par(mfrow=c(1,1))
+rm("camsrean")
+```
+
+## CAMSanaly
+
+```{r CAMSanaly, fig.width=8, fig.height=3}
+tar_load("camsanaly")
+camsanaly <- read_rds(camsanaly$camsanaly19)
+par(mfrow=c(1,4))
+plot(camsanaly[1,,,1], col=viridis(8), main="NO2", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(camsanaly[2,,,1], col=viridis(8), main="PM10", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(camsanaly[3,,,1], col=viridis(8), main="PM25", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(camsanaly[4,,,1], col=viridis(5), main="O3", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+par(mfrow=c(1,1))
+rm("camsanaly")
+```
+
+# Atmospheric RS predictors
+
+## MAIAC
+
+```{r maiac, fig.height=3, fig.width=4}
+tar_load("maiac")
+maiac <- read_rds(maiac$maiac18)
+plot(maiac[1,,,176], col=cividis(4), key.pos = 4, add.geom=cat,
+     breaks=c(0,0.05,0.1,0.2,0.4)) 
+plot(maiac[2,,,176], col=cividis(4), key.pos = 4, add.geom=cat,
+     breaks=c(0,0.05,0.1,0.2,0.4))
+rm("maiac")
+```
+
+## TROPOMI Tropospheric NO2
+
+```{r tropomi no2, fig.height=3, fig.width=4}
+tar_load("tropomi_no2")
+tropomi_no2 <- read_rds(tropomi_no2$tropomi_no2_18)
+plot(tropomi_no2[,,,58], col=cividis(5), key.pos = 4, add.geom=cat,
+     breaks=c(-6.240e+14, 6.277e+14, 1.080e+15, 1.551e+15, 2.5e+15, 5.74e+15)) 
+rm("tropomi_no2")
+```
+
+## OMI Tropospheric NO2
+
+```{r omi no2, fig.height=3, fig.width=4}
+tar_load("omi_no2")
+omi_no2 <- read_rds(omi_no2$omi_no2_18)
+plot(omi_no2[,,,176], col=cividis(5), key.pos = 4, add.geom=cat,
+     breaks=c(-6.240e+14, 6.277e+14, 1.080e+15, 1.551e+15, 2.5e+15, 5.74e+15))
+rm("omi_no2")
+```
+
+## TROPOMI Total O3
+
+```{r tropomi o3, fig.height=3, fig.width=4}
+tar_load("tropomi_o3")
+tropomi_o3 <- read_rds(tropomi_o3$tropomi_o3_18)
+plot(tropomi_o3[,,,58], col=cividis(6), key.pos = 4, add.geom=cat,
+     breaks=c(300, 305, 310, 315, 320, 325, 330))
+rm("tropomi_o3")
+```
+
+## OMI Total O3
+
+```{r omi o3, fig.height=3, fig.width=4}
+tar_load("omi_o3")
+omi_o3 <- read_rds(omi_o3$omi_o3_18)
+plot(omi_o3[,,,176], col=cividis(6), key.pos = 4, add.geom=cat,
+     breaks=c(300, 305, 310, 315, 320, 325, 330))
+rm("omi_o3")
+```
+
+## MODIS LST
+
+```{r modis lst, fig.width=9, fig.height=3}
+tar_load("lst_terra")
+lst_terra <- read_rds(lst_terra$lst18)
+tar_load("lst_aqua")
+lst_aqua <- read_rds(lst_aqua$lst18)
+par(mfrow=c(1,4))
+plot(lst_terra[1,,,1], col=viridis(8), main="Terra day", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(lst_terra[2,,,1], col=viridis(8), main="Terra night", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(lst_aqua[1,,,1], col=viridis(8), main="Aqua day", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+plot(lst_aqua[2,,,1], col=viridis(5), main="Aqua night", 
+     key.pos = NULL, reset = FALSE, add.geom=cat, mfrow=c(1,4))
+par(mfrow=c(1,1))
+rm("lst_terra", "lst_aqua")
+```
+

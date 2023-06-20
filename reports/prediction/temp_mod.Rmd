@@ -1,0 +1,174 @@
+---
+title: "Temperature modelling: Results"
+author: "Carles Milà"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', fig.width = 9, 
+                      fig.height = 6, message = F, warnings = F, echo = F)
+
+library("stars")
+library("tidyverse")
+library("colorspace")
+library("knitr")
+library("lubridate")
+library("targets")
+set.seed(1234)
+```
+
+## Model performance trend
+
+```{r model performance1, fig.width=9, fig.height=5}
+performance <- read_csv("outputs/expo_mod2/temp_perf.csv") %>%
+  mutate(year = year(date)) %>%
+  rename(predicted = pred1)
+results <- data.frame()
+for(y in list(2018:2020, 2018, 2019, 2020)){
+  
+  # Filter by time
+  qfiles <- dplyr::filter(performance, year %in% y)
+  
+  # Bias, slope, R2, RMSE
+  allmod <- lm(tavg ~ predicted, data = qfiles)
+  bias <- allmod$coefficients[1]
+  slope <- allmod$coefficients[2]
+  R2 <- summary(allmod)$r.squared
+  RMSE <- with(qfiles, sqrt(mean((tavg - predicted)^2)))
+  
+  # Spatial R2 and RMSE
+  qfiles_spat <-  qfiles %>% 
+    group_by(ID) %>%
+    summarise(annual_tavg = mean(tavg, na.rm=T),
+              annual_predicted = mean(predicted))
+  R2_spatial <- summary(lm(annual_tavg ~ annual_predicted, data = qfiles_spat))$r.squared
+  RMSE_spatial <- with(qfiles_spat, sqrt(mean((annual_tavg - annual_predicted)^2)))
+  
+  # Temporal R2 and RMSE
+  qfiles_temp <-  qfiles %>% 
+    group_by(ID) %>%
+    mutate(annual_tavg = mean(tavg),
+           annual_predicted = mean(predicted)) %>%
+    group_by(year) %>%
+    mutate(delta_tavg = tavg - annual_tavg,
+           delta_predicted = predicted - annual_predicted)
+  R2_temporal <- summary(lm(delta_tavg ~ delta_predicted, data = qfiles_temp))$r.squared
+  RMSE_temporal <- with(qfiles_temp, sqrt(mean((delta_tavg - delta_predicted)^2)))
+  
+  # Results
+  results_it <- data.frame(year = ifelse(length(y) == 1, as.character(y), "All"), 
+                           RMSE = RMSE, R2 = R2, bias = bias, slope = slope,
+                           RMSE_spatial = RMSE_spatial, R2_spatial = R2_spatial,
+                           RMSE_temporal = RMSE_temporal, R2_temporal = R2_temporal)
+  results <- bind_rows(results, results_it)
+  
+  # Clean
+  rm("RMSE", "R2", "bias", "slope", "allmod", 
+     "qfiles", "qfiles_spat", "qfiles_temp", "results_it",
+     "RMSE_spatial", "R2_spatial", "RMSE_temporal", "R2_temporal")  
+}
+kable(results, row.names = F, digits = 2)
+
+# Graph
+ggplot(performance) +
+  geom_hex(aes(y = tavg, x = predicted)) +
+  geom_abline(aes(intercept = 0, slope = 1)) +
+  scale_fill_continuous_sequential(palette = "Mint") +
+  coord_equal() +
+  facet_wrap(~ year) + 
+  theme_bw() + labs(fill="Count") +
+  ylab("Measured average tavg") + 
+  xlab("Out-of-sample predicted average tavg") +
+  theme(legend.position = "bottom", aspect.ratio = 1, legend.key.width = unit(0.75, "cm"))
+```
+
+## Model performance residuals
+
+```{r model performance2, fig.width=9, fig.height=5}
+performance <- read_csv("outputs/expo_mod2/temp_perf.csv") %>%
+  mutate(year = year(date)) %>%
+  rename(predicted = pred2)
+results <- data.frame()
+for(y in list(2018:2020, 2018, 2019, 2020)){
+  
+  # Filter by time
+  qfiles <- dplyr::filter(performance, year %in% y)
+  
+  # Bias, slope, R2, RMSE
+  allmod <- lm(tavg ~ predicted, data = qfiles)
+  bias <- allmod$coefficients[1]
+  slope <- allmod$coefficients[2]
+  R2 <- summary(allmod)$r.squared
+  RMSE <- with(qfiles, sqrt(mean((tavg - predicted)^2)))
+  
+  # Spatial R2 and RMSE
+  qfiles_spat <-  qfiles %>% 
+    group_by(ID) %>%
+    summarise(annual_tavg = mean(tavg, na.rm=T),
+              annual_predicted = mean(predicted))
+  R2_spatial <- summary(lm(annual_tavg ~ annual_predicted, data = qfiles_spat))$r.squared
+  RMSE_spatial <- with(qfiles_spat, sqrt(mean((annual_tavg - annual_predicted)^2)))
+  
+  # Temporal R2 and RMSE
+  qfiles_temp <-  qfiles %>% 
+    group_by(ID) %>%
+    mutate(annual_tavg = mean(tavg),
+           annual_predicted = mean(predicted)) %>%
+    group_by(year) %>%
+    mutate(delta_tavg = tavg - annual_tavg,
+           delta_predicted = predicted - annual_predicted)
+  R2_temporal <- summary(lm(delta_tavg ~ delta_predicted, data = qfiles_temp))$r.squared
+  RMSE_temporal <- with(qfiles_temp, sqrt(mean((delta_tavg - delta_predicted)^2)))
+  
+  # Results
+  results_it <- data.frame(year = ifelse(length(y) == 1, as.character(y), "All"), 
+                           RMSE = RMSE, R2 = R2, bias = bias, slope = slope,
+                           RMSE_spatial = RMSE_spatial, R2_spatial = R2_spatial,
+                           RMSE_temporal = RMSE_temporal, R2_temporal = R2_temporal)
+  results <- bind_rows(results, results_it)
+  
+  # Clean
+  rm("RMSE", "R2", "bias", "slope", "allmod", 
+     "qfiles", "qfiles_spat", "qfiles_temp", "results_it",
+     "RMSE_spatial", "R2_spatial", "RMSE_temporal", "R2_temporal")  
+}
+kable(results, row.names = F, digits = 2)
+
+# Graph
+ggplot(performance) +
+  geom_hex(aes(y = tavg, x = predicted)) +
+  geom_abline(aes(intercept = 0, slope = 1)) +
+  scale_fill_continuous_sequential(palette = "Mint") +
+  coord_equal() +
+  facet_wrap(~ year) + 
+  theme_bw() + labs(fill="Count") +
+  ylab("Measured average tavg") + 
+  xlab("Out-of-sample predicted average tavg") +
+  theme(legend.position = "bottom", aspect.ratio = 1, legend.key.width = unit(0.75, "cm"))
+```
+
+## Variable importance
+
+```{r varimp, fig.width=5, fig.height=8, results='hide'}
+varimp <- read_csv("outputs/expo_mod2/temp_varimp.csv") 
+names(varimp) <- c("Variable", "raw", "Importance")
+ggplot(varimp, aes(x=Variable, y=Importance)) +
+  geom_col(col = "black", fill = "white", width = 0.5) +
+  theme_light() +
+  ylab("Variable importance (scaled to 0-100)") + 
+  coord_flip() +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.y = element_blank(), 
+    legend.position = "bottom")
+```
+
+```{r clean}
+#  Clean 
+tmpfiles <- paste0(normalizePath(tempdir()), "/", dir(tempdir(), pattern = ".tif"))
+unlink(tmpfiles, recursive = TRUE)
+```

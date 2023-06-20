@@ -1,0 +1,188 @@
+---
+title: 'AP modelling: Exploratory analysis'
+author: "Carles Milà"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center', 
+                      message = F, warnings = F, echo = F)
+
+library("targets")
+library("tidyverse")
+library("lubridate")
+library("colorspace")
+library("knitr")
+library("ggcorrplot")
+library("lares")
+library("splines")
+library("mgcv")
+```
+
+```{r read data}
+# Read data
+tar_load("ap_moddata")
+apdata <- read_csv(ap_moddata, guess_max = 10000) %>%
+  mutate(year = year(date)) %>%
+  dplyr::select(-st_type, -area_type, -water)  # Not relevant, no variability
+
+# Merge CAMS predictors
+apdata <- apdata %>%
+  mutate(CAMS_pm25 = ifelse(!is.na(CAMSrean_pm25), CAMSrean_pm25, CAMSanaly_pm25),
+         CAMS_pm10 = ifelse(!is.na(CAMSrean_pm10), CAMSrean_pm10, CAMSanaly_pm10),
+         CAMS_no2 = ifelse(!is.na(CAMSrean_no2), CAMSrean_no2, CAMSanaly_no2),
+         CAMS_o3 = ifelse(!is.na(CAMSrean_o3), CAMSrean_o3, CAMSanaly_o3)) %>%
+  dplyr::select(-contains("rean_"), -contains("analy_"))
+```
+
+# Missing values
+
+```{r missingvals}
+missingvals <- sapply(apdata, function(x) tapply(x, apdata$year, function(y) sum(is.na(y))))
+missingvals <- t(missingvals)
+kable(missingvals)
+```
+
+# Unusual number of measurements
+
+```{r unusual}
+unusual <- group_by(apdata, ID, year) %>%
+  summarise(N = n()) %>% 
+  dplyr::filter(N>366)
+kable(unusual)
+unusual <- group_by(apdata, ID, date) %>%
+  summarise(N = n()) %>% 
+  dplyr::filter(N>1)
+kable(unusual)
+```
+
+# Correlation matrix
+
+```{r cormat, fig.height=12, fig.width=10}
+cont_ap <- dplyr::select_if(apdata, is.numeric) %>%
+  dplyr::select(-year, -yday)
+cormat <- cor(cont_ap, method="spearman", use = "pairwise.complete.obs")
+ggcorrplot(cormat, outline.col = "white", lab = F, 
+           type = "upper", title="Spearman correlation matrix") +
+  theme(legend.position = "bottom")
+```
+
+# Univariate distributions
+
+## Outcomes
+
+```{r univariate cont, fig.height=5, fig.width=8}
+aplong <-  dplyr::select(apdata, NO2, PM2.5, PM10, O3, year) %>%
+  pivot_longer(cols = -year, names_to = "pollutant", values_to = "concentration") %>%
+  mutate(year = as.character(year))
+ggplot(aplong, aes(x = concentration, fill = year, colour = year)) +
+  geom_density(alpha = 0.2) +
+  facet_wrap(~ pollutant, scales = "free") +
+  scale_color_discrete_qualitative(palette = "Cold") +
+  scale_fill_discrete_qualitative(palette = "Cold") +
+  theme_bw() + theme(legend.position = "bottom")
+```
+
+# Top 15 predictors
+
+## PM10
+
+```{r top15 pm10, echo=FALSE, results='hide'}
+cont_ap_rank <- dplyr::select(apdata, 
+                              -NO2, -PM2.5, -O3, 
+                              -year, -ID,
+                              -contains("pm25"), -contains("no2"), -contains("o3"))
+corr_var(cont_ap_rank, PM10, method="spearman", top=15, quiet=T, use="pairwise.complete.obs")
+```
+
+## PM2.5
+
+```{r top15 pm25, results='hide'}
+cont_ap_rank <- dplyr::select(apdata, 
+                              -NO2, -PM10, -O3, 
+                              -year, -ID, 
+                              -contains("no2"), -contains("o3"))
+corr_var(cont_ap_rank, PM2.5, method = "spearman", top = 15, quiet=T, use="pairwise.complete.obs")
+```
+
+## NO2
+
+```{r top15 no2, results='hide'}
+cont_ap_rank <- dplyr::select(apdata, 
+                              -PM2.5, -PM10, -O3, 
+                              -year, -ID,
+                              -contains("pm25"), -contains("pm10"), -contains("o3"))
+corr_var(cont_ap_rank, NO2, method = "spearman", top = 15, quiet=T, use="pairwise.complete.obs")
+```
+
+## O3
+
+```{r top15 o3, results='hide'}
+cont_ap_rank <- dplyr::select(apdata, 
+                              -PM2.5, -PM10, -NO2, 
+                              -year, -ID,
+                              -contains("pm25"), -contains("pm10"))
+corr_var(cont_ap_rank, O3, method = "spearman", top = 15, quiet=T, use="pairwise.complete.obs")
+```
+
+# Bivariate distributions
+
+## PM10/PM2.5 and AOD
+
+```{r PMAOD, fig.height=3, fig.width=8}
+pmdata <- dplyr::select(apdata, year, PM2.5, PM10, maiac_aqua, maiac_terra) %>%
+  pivot_longer(cols = 4:5, names_to = "sensor", values_to = "AOD") %>%
+  mutate(year = as.character(year))
+ggplot(pmdata, aes(y = PM2.5, x = AOD)) +
+  geom_point(alpha = 0.05) +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ sensor) +
+  theme_bw() 
+ggplot(pmdata, aes(y = PM10, x = AOD)) +
+  geom_point(alpha = 0.05) +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ sensor) +
+  theme_bw() 
+```
+
+# PM2.5 and PM10 imputation (2019)
+
+## Exploratory
+
+```{r pmimp, fig.width=5, fig.height=3}
+pmdata <- dplyr::select(apdata, PM10, PM2.5, dust, holiday, ID, 
+                        year, yday,  measure_PM2.5, measure_PM10) %>%
+  dplyr::filter(year == 2019) %>%
+  mutate(ID = as.character(ID), year = as.character(year))
+pmdata <- pmdata[complete.cases(pmdata),]
+pmdata <- dplyr::filter(pmdata, measure_PM10==measure_PM2.5)
+ggplot(pmdata) +
+  geom_point(aes(y = PM2.5, x = PM10, colour=measure_PM10), alpha = 0.2) +
+  geom_smooth(aes(y = PM2.5, x = PM10), method = "lm") +
+  theme_bw() +
+  coord_equal()
+summary(lm(PM2.5 ~ PM10, data = pmdata))
+summary(mgcv::gam(PM2.5 ~ te(PM10, yday, k=c(3, 25)), data = pmdata))
+```
+
+## 5-fold predictive ability (2019)
+
+```{r imppm}
+set.seed(1234)
+IDfolds <- data.frame(ID = unique(pmdata$ID))
+IDfolds$fold <- sample(rep(1:5, ceiling(nrow(IDfolds)/5)), nrow(IDfolds))
+pmdata <- left_join(pmdata, IDfolds, by = "ID")
+res <- data.frame(fold=1:5, RMSE = NA, R2 = NA)
+for(i in res$fold){
+  pmdata_it <- dplyr::filter(pmdata, fold != i)
+  preddata_it <- dplyr::filter(pmdata, fold == i)
+  mod_it <- mgcv::gam(PM2.5 ~ te(PM10, yday, k=c(3, 25)), data = pmdata_it)
+  preddata_it$preds <- predict(mod_it, preddata_it)
+  res$RMSE[res$fold == i] <- sqrt(mean((preddata_it$PM2.5 - preddata_it$preds)^2))
+  res$R2[res$fold == i] <- cor(preddata_it$PM2.5, preddata_it$preds)^2
+  rm("pmdata_it", "preddata_it", "mod_it")
+}
+sapply(res, mean)[2:3]
+rm("pmdata", "IDfolds", "res")
+```

@@ -1,0 +1,58 @@
+---
+title: "MAIAC imputation: Exploratory analysis"
+author: "Carles Milà"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', 
+                      message = F, warnings = F, echo = F)
+
+library("targets")
+library("tidyverse")
+library("viridis")
+library("RColorBrewer")
+library("ggcorrplot")
+library("lares")
+```
+
+# Correlation matrix of predictors
+
+```{r cormat, fig.height=8, fig.width=9}
+tar_load("modis_train")
+terra_train <- read_csv(gsub("year", "2018", modis_train$MAIAC_terra)) %>%
+  dplyr::filter(split=="train") %>%
+  dplyr::select(-split)
+set.seed(1234)
+isamples <- sample(1:nrow(terra_train), 100000)
+terra_train <- terra_train[isamples,]
+terra_train <- dplyr::select(terra_train, where(is.numeric))
+
+cormat <- cor(terra_train, method="spearman")
+ggcorrplot(cormat, hc.order = TRUE, outline.col = "white", 
+           title="Spearman correlation matrix (100000 random samples)")
+```
+
+# Correlation rank: Terra 2018
+
+```{r corrank terra 2018}
+corr_var(terra_train, AOD55_terra, method = "spearman", top = 10) 
+rm("terra_train")
+```
+
+# Correlation rank: Aqua 2018
+
+```{r corrank aqua 2019}
+aqua_train <- read_csv(gsub("year", "2018", modis_train$MAIAC_aqua)) %>%
+  dplyr::filter(split=="train") %>%
+  dplyr::select(-split)
+set.seed(1234)
+isamples <- sample(1:nrow(aqua_train), 100000)
+aqua_train <- aqua_train[isamples,]
+aqua_train <- dplyr::select(aqua_train, where(is.numeric))
+corr_var(aqua_train, AOD55_aqua, method = "spearman", top = 10) 
+rm("aqua_train")
+```

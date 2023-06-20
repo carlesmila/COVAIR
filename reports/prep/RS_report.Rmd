@@ -1,0 +1,503 @@
+---
+title: "RS preprocessing analysis"
+author: "Carles Milà"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.align = 'center')
+
+library("tidyverse")
+library("knitr")
+library("stars")
+library("sf")
+library("targets")
+library("lubridate")
+library("ggthemes")
+library("cowplot")
+```
+
+# AOD
+
+```{r MAIAC availability, fig.width=8}
+# Read maiac and boundary data
+tar_load("maiac")
+maiac <- c(read_rds(maiac$maiac18), read_rds(maiac$maiac19), 
+             read_rds(maiac$maiac20), along=3)
+tar_load("cat")
+cat <- read_rds(cat)
+
+# Compute AOD availability 
+maiac_perc <- st_apply(maiac, MARGIN=c("x","y"), 
+                       FUN=function(x) sum(!is.na(x))/1096*100) %>%
+  merge()
+maiac_perc <- maiac_perc[cat]
+print(paste0("Mean % available of AOD Terra: ", mean(maiac_perc[,,,1]$X, na.rm=T)))
+print(paste0("Mean % available of AOD Aqua: ", mean(maiac_perc[,,,2]$X, na.rm=T)))
+
+ggplot() +
+  geom_stars(data=maiac_perc) +
+  facet_wrap(~attributes) +
+  theme_bw() + ylab("") + xlab("") +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  labs(fill="Availability (%)") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  coord_fixed()
+```
+
+```{r MAIAC mean, fig.width=8}
+# Compute AOD mean
+maiac_mean <- st_apply(maiac, MARGIN=c("x","y"), 
+                       FUN=function(x) mean(x, na.rm=T)) %>%
+  merge()
+maiac_mean <- maiac_mean[cat]
+ggplot() +
+  geom_stars(data=maiac_mean) +
+  facet_wrap(~attributes) +
+  theme_bw() + ylab("") + xlab("") +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  labs(fill="Mean AOD") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  coord_fixed()
+```
+
+```{r MAIAC gaps, fig.width=8}
+# MAIAC Terra
+gapsize_terra <- maiac[1,,,]
+gapsize_terra <- !is.na(gapsize_terra)
+gapsize_terra <- gapsize_terra[cat]
+gapsize_terra <- purrr::map(1:1096, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, AOD55_terra==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_terra)
+gapsize_terra <- unlist(gapsize_terra)
+paste0("Maiac Terra: gap size (km2)")
+summary(gapsize_terra)
+
+# MAIAC Aqua
+gapsize_aqua <- maiac[2,,,]
+gapsize_aqua <- !is.na(gapsize_aqua)
+gapsize_aqua <- gapsize_aqua[cat]
+gapsize_aqua <- purrr::map(1:1096, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, AOD55_aqua==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_aqua)
+gapsize_aqua <- unlist(gapsize_aqua)
+paste0("Maiac aqua: gap size (km2)")
+summary(gapsize_aqua)
+rm("maiac", "gapsize_terra", "gapsize_aqua")
+```
+
+# Tropospheric NO2
+
+```{r availability no2, fig.width=8}
+# OMI
+tar_load("omi_no2")
+omi_no2 <- c(read_rds(omi_no2$omi_no2_18), read_rds(omi_no2$omi_no2_19), 
+             read_rds(omi_no2$omi_no2_20), along=3)
+omi_perc <- st_apply(omi_no2, MARGIN=c("x","y"), 
+                     FUN=function(x) sum(!is.na(x))/1096*100)
+omi_perc <- omi_perc[st_buffer(cat, 1000)]
+print(paste0("Mean % available of OMI NO2: ", mean(omi_perc$omi_no2, na.rm=T)))
+p1 <- ggplot() +
+  geom_stars(data=omi_perc) +
+  scale_fill_viridis_c(na.value = "#FF000000", limits = c(30,90)) +
+  facet_wrap(~"omi_no2") +
+  labs(fill="Availability (%)") +
+  theme_bw() + ylab("") + xlab("") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  theme(legend.position = "bottom", plot.margin = unit(c(0.005,0.005,0.005,0.005), "cm")) +
+  coord_fixed()
+
+# TROPOMI
+tar_load("tropomi_no2")
+tropomi_no2 <- c(read_rds(tropomi_no2$tropomi_no2_18), 
+                 read_rds(tropomi_no2$tropomi_no2_19),
+                 read_rds(tropomi_no2$tropomi_no2_20), along=3)
+tropomi_perc <- st_apply(tropomi_no2, MARGIN=c("x","y"),
+                         FUN=function(x) sum(!is.na(x))/1096*100)
+tropomi_perc <- tropomi_perc[st_buffer(cat, 1000)]
+print(paste0("Mean % available of TROPOMI NO2: ", mean(tropomi_perc$tropo_no2, na.rm=T)))
+p2 <- ggplot() +
+  geom_stars(data=tropomi_perc) +
+  scale_fill_viridis_c(na.value = "#FF000000", limits = c(30,90)) +
+  facet_wrap(~"tropomi_no2") +
+  labs(fill="Availability (%)") +
+  theme_bw() + ylab("") + xlab("") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  theme(legend.position = "bottom", plot.margin = unit(c(0.005,0.005,0.005,0.005), "cm")) +
+  coord_fixed()
+plot_grid(p1, p2, nrow=1, rel_widths=c(0.495, 0.505))
+```
+
+```{r mean no2, fig.width=8}
+omi_mean <- st_apply(omi_no2, MARGIN=c("x","y"), 
+                     FUN=function(x) mean(x, na.rm=T))
+omi_mean <- omi_mean[st_buffer(cat, 15000)]
+p1 <- ggplot() +
+  geom_stars(data=omi_mean) +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  facet_wrap(~"omi_no2") +
+  labs(fill = "Mean tropospheric NO2\n(mol/cm2)") +
+  theme_bw() + ylab("") + xlab("") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  theme(legend.position = "bottom", plot.margin = unit(c(0.005,0.005,0.005,0.005), "cm")) +
+  coord_fixed()
+
+tropomi_mean <- st_apply(tropomi_no2, MARGIN=c("x","y"),
+                         FUN=function(x) mean(x, na.rm=T))
+tropomi_mean <- tropomi_mean[st_buffer(cat, 2500)]
+p2 <- ggplot() +
+  geom_stars(data=tropomi_mean) +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  facet_wrap(~"tropomi_no2") +
+  labs(fill = "Mean tropospheric NO2\n(mol/cm2)") +
+  theme_bw() + ylab("") + xlab("") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  theme(legend.position = "bottom", plot.margin = unit(c(0.005,0.005,0.005,0.005), "cm")) +
+  coord_fixed()
+plot_grid(p1, p2, nrow=1, rel_widths=c(0.495, 0.505))
+```
+
+```{r no2 gaps, fig.width=8}
+# NO2 OMI
+gapsize_omi <- omi_no2
+gapsize_omi <- !is.na(gapsize_omi)
+gapsize_omi <- gapsize_omi[cat]
+gapsize_omi <- purrr::map(1:1096, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, omi_no2==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_omi)
+gapsize_omi <- unlist(gapsize_omi)
+paste0("OMI NO2: gap size (km2)")
+summary(gapsize_omi)
+
+# NO2 TROPOMI
+gapsize_tropomi <- tropomi_no2
+gapsize_tropomi <- !is.na(gapsize_tropomi)
+gapsize_tropomi <- gapsize_tropomi[cat]
+gapsize_tropomi <- purrr::map(1:977, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, tropo_no2==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_tropomi)
+gapsize_tropomi <- unlist(gapsize_tropomi)
+paste0("TROPOMI NO2: gap size (km2)")
+summary(gapsize_tropomi)
+rm("tropomi_no2", "omi_no2", "gapsize_omi", "gapsize_tropomi")
+```
+
+# Total O3
+
+```{r availability o3, fig.width=8}
+# OMI
+tar_load("omi_o3")
+omi_o3 <- c(read_rds(omi_o3$omi_o3_18), read_rds(omi_o3$omi_o3_19), 
+             read_rds(omi_o3$omi_o3_20), along=3)
+omi_perc <- st_apply(omi_o3, MARGIN=c("x","y"), 
+                     FUN=function(x) sum(!is.na(x))/1096*100)
+omi_perc <- omi_perc[st_buffer(cat, 1000)]
+print(paste0("Mean % available of OMI O3: ", mean(omi_perc$omi_o3, na.rm=T)))
+p1 <- ggplot() +
+  geom_stars(data=omi_perc) +
+  scale_fill_viridis_c(na.value = "#FF000000", limits = c(30,90)) +
+  facet_wrap(~"omi_o3") +
+  labs(fill="Availability (%)") +
+  theme_bw() + ylab("") + xlab("") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  theme(legend.position = "bottom", plot.margin = unit(c(0.005,0.005,0.005,0.005), "cm")) +
+  coord_fixed()
+
+# TROPOMI
+tar_load("tropomi_o3")
+tropomi_o3 <- c(read_rds(tropomi_o3$tropomi_o3_18), 
+                 read_rds(tropomi_o3$tropomi_o3_19),
+                 read_rds(tropomi_o3$tropomi_o3_20), along=3)
+tropomi_perc <- st_apply(tropomi_o3, MARGIN=c("x","y"),
+                         FUN=function(x) sum(!is.na(x))/1096*100)
+tropomi_perc <- tropomi_perc[st_buffer(cat, 1000)]
+print(paste0("Mean % available of TROPOMI O3: ", mean(tropomi_perc$tropo_o3, na.rm=T)))
+
+p2 <- ggplot() +
+  geom_stars(data=tropomi_perc) +
+  scale_fill_viridis_c(na.value = "#FF000000", limits = c(30,90)) +
+  facet_wrap(~"tropomi_o3") +
+  labs(fill="Availability (%)") +
+  theme_bw() + ylab("") + xlab("") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  theme(legend.position = "bottom", plot.margin = unit(c(0.005,0.005,0.005,0.005), "cm")) +
+  coord_fixed()
+plot_grid(p1, p2, nrow=1, rel_widths=c(0.495, 0.505))
+```
+
+```{r mean o3, fig.width=8}
+omi_mean <- st_apply(omi_o3, MARGIN=c("x","y"), 
+                     FUN=function(x) mean(x, na.rm=T))
+omi_mean <- omi_mean[st_buffer(cat, 15000)]
+p1 <- ggplot() +
+  geom_stars(data=omi_mean) +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  facet_wrap(~"omi_o3") +
+  labs(fill = "Mean total O3\n(Dobson units)") +
+  theme_bw() + ylab("") + xlab("") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  theme(legend.position = "bottom", plot.margin = unit(c(0.005,0.005,0.005,0.005), "cm")) +
+  coord_fixed()
+
+tropomi_mean <- st_apply(tropomi_o3, MARGIN=c("x","y"),
+                         FUN=function(x) mean(x, na.rm=T))
+tropomi_mean <- tropomi_mean[st_buffer(cat, 2500)]
+p2 <- ggplot() +
+  geom_stars(data=tropomi_mean) +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  facet_wrap(~"tropomi_o3") +
+  labs(fill = "Mean total O3\n(Dobson units)") +
+  theme_bw() + ylab("") + xlab("") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  theme(legend.position = "bottom", plot.margin = unit(c(0.005,0.005,0.005,0.005), "cm")) +
+  coord_fixed()
+plot_grid(p1, p2, nrow=1, rel_widths=c(0.495, 0.505))
+```
+
+```{r o3 gaps, fig.width=8}
+# o3 OMI
+gapsize_omi <- omi_o3
+gapsize_omi <- !is.na(gapsize_omi)
+gapsize_omi <- gapsize_omi[cat]
+gapsize_omi <- purrr::map(1:1096, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, omi_o3==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_omi)
+gapsize_omi <- unlist(gapsize_omi)
+paste0("OMI o3: gap size (km2)")
+summary(gapsize_omi)
+
+# o3 TROPOMI
+gapsize_tropomi <- tropomi_o3
+gapsize_tropomi <- !is.na(gapsize_tropomi)
+gapsize_tropomi <- gapsize_tropomi[cat]
+gapsize_tropomi <- purrr::map(1:977, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, tropo_o3==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_tropomi)
+gapsize_tropomi <- unlist(gapsize_tropomi)
+paste0("TROPOMI o3: gap size (km2)")
+summary(gapsize_tropomi)
+rm("tropomi_o3", "omi_no2", "gapsize_omi", "gapsize_tropomi")
+```
+
+# LST
+
+## Terra
+
+```{r LST terra availability, fig.width=8}
+# Read LST terra data
+tar_load("lst_terra")
+lst_terra <- c(read_rds(lst_terra$lst18), read_rds(lst_terra$lst19),
+               read_rds(lst_terra$lst20), along=3)
+
+terra_perc <- st_apply(lst_terra, MARGIN=c("x","y"), 
+                       FUN=function(x) sum(!is.na(x))/1096*100) %>%
+  merge()
+terra_perc <- terra_perc[cat]
+print(paste0("Mean % available of LST Terra day: ", mean(terra_perc[,,,1]$X, na.rm=T)))
+print(paste0("Mean % available of LST Terra night: ", mean(terra_perc[,,,2]$X, na.rm=T)))
+
+ggplot() +
+  geom_stars(data=terra_perc) +
+  facet_wrap(~attributes) +
+  theme_bw() + ylab("") + xlab("") +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  labs(fill="Availability (%)") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  coord_fixed()
+```
+
+```{r LST terra mean, fig.width=8}
+terra_mean <- st_apply(lst_terra, MARGIN=c("x","y"),
+                       FUN=function(x) mean(x, na.rm=T))%>%
+  merge()
+terra_mean <- terra_mean[cat]
+ggplot() +
+  geom_stars(data=terra_mean) +
+  facet_wrap(~attributes) +
+  theme_bw() + ylab("") + xlab("") +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  labs(fill="Mean LST (ºC)") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  coord_fixed()
+```
+
+```{r LST terra gaps, fig.width=8}
+# LST Terra day
+gapsize_day <- lst_terra[1,,,]
+gapsize_day <- !is.na(gapsize_day)
+gapsize_day <- gapsize_day[cat]
+gapsize_day <- purrr::map(1:1096, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, dayLST_terra==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_day)
+gapsize_day <- unlist(gapsize_day)
+paste0("LST Terra day: gap size (km2)")
+summary(gapsize_day)
+
+# LST Terra night
+gapsize_night <- lst_terra[2,,,]
+gapsize_night <- !is.na(gapsize_night)
+gapsize_night <- gapsize_night[cat]
+gapsize_night <- purrr::map(1:1096, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, nightLST_terra==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_night)
+gapsize_night <- unlist(gapsize_night)
+paste0("LST Terra night: gap size (km2)")
+summary(gapsize_night)
+rm("lst_terra", "gapsize_day", "gapsize_night")
+```
+
+
+## Aqua
+
+```{r LST aqua availability, fig.width=8}
+# Read LST aqua data
+tar_load("lst_aqua")
+lst_aqua <- c(read_rds(lst_aqua$lst18), read_rds(lst_aqua$lst19),
+               read_rds(lst_aqua$lst20), along=3)
+
+aqua_perc <- st_apply(lst_aqua, MARGIN=c("x","y"), 
+                       FUN=function(x) sum(!is.na(x))/1096*100) %>%
+  merge()
+aqua_perc <- aqua_perc[cat]
+print(paste0("Mean % available of LST Aqua day: ", mean(aqua_perc[,,,1]$X, na.rm=T)))
+print(paste0("Mean % available of LST Aqua night: ", mean(aqua_perc[,,,2]$X, na.rm=T)))
+ggplot() +
+  geom_stars(data=aqua_perc) +
+  facet_wrap(~attributes) +
+  theme_bw() + ylab("") + xlab("") +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  labs(fill="Availability (%)") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  coord_fixed()
+```
+
+```{r LST aqua mean, fig.width=8}
+aqua_mean <- st_apply(lst_aqua, MARGIN=c("x","y"),
+                       FUN=function(x) mean(x, na.rm=T))%>%
+  merge()
+aqua_mean <- aqua_mean[cat]
+ggplot() +
+  geom_stars(data=aqua_mean) +
+  facet_wrap(~attributes) +
+  theme_bw() + ylab("") + xlab("") +
+  scale_fill_viridis_c(na.value = "#FF000000") +
+  labs(fill="Mean LST (ºC)") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  coord_fixed()
+```
+
+```{r LST aqua gaps, fig.width=8}
+# LST Aqua day
+gapsize_day <- lst_aqua[1,,,]
+gapsize_day <- !is.na(gapsize_day)
+gapsize_day <- gapsize_day[cat]
+gapsize_day <- purrr::map(1:1096, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, dayLST_aqua==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_day)
+gapsize_day <- unlist(gapsize_day)
+paste0("LST aqua day: gap size (km2)")
+summary(gapsize_day)
+
+# LST Aqua night
+gapsize_night <- lst_aqua[2,,,]
+gapsize_night <- !is.na(gapsize_night)
+gapsize_night <- gapsize_night[cat]
+gapsize_night <- purrr::map(1:1096, function(x, starsobj){
+  gaps <- st_as_sf(starsobj[,,,x], merge=T)
+  gaps <- dplyr::filter(gaps, nightLST_aqua==0) %>%
+    mutate(area = as.numeric(st_area(geometry)*0.000001)) 
+  if(nrow(gaps)==0){
+    return(NA)
+  }else{
+    return(mean(gaps$area))
+  }
+  gaps
+}, gapsize_night)
+gapsize_night <- unlist(gapsize_night)
+paste0("LST aqua night: gap size (km2)")
+summary(gapsize_night)
+rm("lst_aqua", "gapsize_day", "gapsize_night")
+```
+

@@ -1,0 +1,65 @@
+---
+title: "OMI imputation: Exploratory analysis"
+author: "Carles Milà"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', 
+                      message = F, warnings = F, echo = F)
+
+library("targets")
+library("tidyverse")
+library("viridis")
+library("RColorBrewer")
+library("ggcorrplot")
+library("lares")
+```
+
+## NO2 
+
+### Correlation matrix of predictors: 2019
+
+```{r cormat no2, fig.height=8, fig.width=9}
+tar_load("omi_train")
+omi_train <- read_csv(gsub("year", "2019", omi_train$omi_no2)) %>%
+  dplyr::filter(split=="train") %>%
+  dplyr::select(-split)
+omi_train <- dplyr::select(omi_train, where(is.numeric))
+cormat <- cor(omi_train, method="spearman")
+ggcorrplot(cormat, hc.order = TRUE, outline.col = "white", 
+           title="Spearman correlation matrix")
+```
+
+### Correlation rank: 2020
+
+```{r corrank no2}
+corr_var(omi_train, omi_no2, method = "spearman", top = 10) 
+rm("omi_train")
+```
+
+
+## O3 
+
+### Correlation matrix of predictors: 2019
+
+```{r cormat o3, fig.height=8, fig.width=9}
+tar_load("omi_train")
+omi_train <- read_csv(gsub("year", "2019", omi_train$omi_o3)) %>%
+  dplyr::filter(split=="train") %>%
+  dplyr::select(-split)
+omi_train <- dplyr::select(omi_train, where(is.numeric))
+cormat <- cor(omi_train, method="spearman")
+ggcorrplot(cormat, hc.order = TRUE, outline.col = "white", 
+           title="Spearman correlation matrix")
+```
+
+### Correlation rank: 2020
+
+```{r corrank o3}
+corr_var(omi_train, omi_o3, method = "spearman", top = 10) 
+rm("omi_train")
+```

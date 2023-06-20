@@ -1,0 +1,396 @@
+---
+title: "Station exploratory analysis"
+author: "Carles Milà"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.align = 'center')
+
+library("tidyverse")
+library("sf")
+library("knitr")
+library("targets")
+library("lubridate")
+library("ggthemes")
+library("lme4")
+library("broomExtra")
+library("cowplot")
+library("plotly")
+```
+
+# Air pollution
+
+```{r ap measures}
+# Read station and boundary data
+tar_load("ap_stations")
+readings <- bind_rows(read_rds(ap_stations$readings18),
+                      read_rds(ap_stations$readings19),
+                      read_rds(ap_stations$readings20))
+stations <- read_rds(ap_stations$stations)
+tar_load("cat")
+cat <- read_rds(cat)
+```
+
+## Number of stations and measurements
+
+```{r measurement availability, fig.width=9, fig.height=3}
+readings_tab <- readings %>%
+  group_by(pollutant, ID) %>%
+  summarise(N=n(), .groups = "keep") %>%
+  ungroup()
+ggplot(readings_tab) +
+  geom_histogram(aes(N), colour = "grey50") +
+  facet_wrap(~ pollutant, nrow = 1) +
+  theme_bw()
+readings_tab <-  readings_tab %>%
+  group_by(pollutant) %>%
+  summarise(`Mean number of days (SD)` = paste0(round(mean(N, 1)),
+                                                " (", round(sd(N, 1)), ")"),
+            `Number of stations` = n())
+kable(readings_tab)
+```
+
+## Station type
+
+```{r station types, fig.width=7, fig.height=6}
+# Get unique tuples ID-pollutant
+IDs_pollutant <- dplyr::select(readings, ID, pollutant, measure_type)
+IDs_pollutant <- IDs_pollutant[!duplicated(IDs_pollutant),]
+IDs_pollutant <- left_join(IDs_pollutant, stations, by = "ID")
+
+# Table
+IDs_pollutant_tab <- IDs_pollutant %>%
+  dplyr::select(ID, pollutant, st_type) %>%
+  group_by(pollutant, st_type) %>%
+  summarise(N1 = n(), .groups="keep") %>%
+  group_by(pollutant) %>%
+  mutate(N2=sum(N1),
+         `N (%)` = paste0(N1, " (", round(N1/N2*100, 1), "%)")) %>%
+  ungroup() %>%
+  dplyr::select(-N1, -N2) %>%
+  pivot_wider(names_from = "st_type", values_from = "N (%)")
+kable(IDs_pollutant_tab)
+
+# Map
+ggplot() +
+  geom_sf(data=cat, alpha=0.2) +
+  geom_sf(data=IDs_pollutant, aes(colour=st_type, geometry=geometry), size=1) +
+  facet_wrap(~ pollutant, nrow=2) +
+  theme_bw() + 
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  scale_colour_colorblind() + labs(colour="Station type")
+```
+
+## Station measure type
+
+```{r station measure types, fig.width=7, fig.height=6}
+# Table
+IDs_pollutant_tab <- IDs_pollutant %>%
+  dplyr::select(ID, pollutant, measure_type) %>%
+  group_by(pollutant, measure_type) %>%
+  summarise(N1 = n(), .groups="keep") %>%
+  group_by(pollutant) %>%
+  mutate(N2=sum(N1),
+         `N (%)` = paste0(N1, " (", round(N1/N2*100, 1), "%)")) %>%
+  ungroup() %>%
+  dplyr::select(-N1, -N2) %>%
+  pivot_wider(names_from = "measure_type", values_from = "N (%)")
+kable(IDs_pollutant_tab)
+
+# Map
+ggplot() +
+  geom_sf(data=cat, alpha=0.2) +
+  geom_sf(data=IDs_pollutant, aes(colour=measure_type, geometry=geometry), size=1) +
+  facet_wrap(~ pollutant, nrow=2) +
+  theme_bw() + 
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  scale_colour_colorblind() + labs(colour="Station type")
+```
+
+## Yearly averages
+
+```{r yearly conc}
+yearly_avgs <- readings %>%
+  mutate(year = year(as.Date(date))) %>%
+  group_by(year, pollutant, ID) %>%
+  summarise(conc=mean(conc), .groups="keep") %>%
+  group_by(year, pollutant) %>%
+  summarise(conc=mean(conc), .groups="keep") %>%
+  pivot_wider(names_from = "year", values_from = "conc")
+kable(yearly_avgs, digits=1)
+```
+
+```{r yearly maps, fig.height=6, fig.width=10}
+yearly_avgs <- readings %>%
+  mutate(year = year(as.Date(date))) %>%
+  group_by(year, pollutant, ID) %>%
+  summarise(conc=mean(conc), .groups="keep") 
+yearly_avgs <- left_join(yearly_avgs, stations, by = "ID")
+
+p1 <- ggplot() +
+  geom_sf(data=cat, alpha=0.2) +
+  geom_sf(data=dplyr::filter(yearly_avgs, pollutant=="NO2"),
+                             aes(colour=conc, geometry=geometry), size=1) +
+  facet_wrap(~ year) +
+  theme_bw() + 
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  labs(colour="Average concentration") + 
+  scale_colour_viridis_c() +  ggtitle("NO2")
+
+p2 <- ggplot() +
+  geom_sf(data=cat, alpha=0.2) +
+  geom_sf(data=dplyr::filter(yearly_avgs, pollutant=="O3"),
+                             aes(colour=conc, geometry=geometry), size=1) +
+  facet_wrap(~ year) +
+  theme_bw() + 
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  labs(colour="Average concentration") + 
+  scale_colour_viridis_c() +  ggtitle("O3")
+
+p3 <- ggplot() +
+  geom_sf(data=cat, alpha=0.2) +
+  geom_sf(data=dplyr::filter(yearly_avgs, pollutant=="PM2.5"),
+                             aes(colour=conc, geometry=geometry), size=1) +
+  facet_wrap(~ year) +
+  theme_bw() + 
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  labs(colour="Average concentration") + 
+  scale_colour_viridis_c() +  ggtitle("PM2.5")
+
+p4 <- ggplot() +
+  geom_sf(data=cat, alpha=0.2) +
+  geom_sf(data=dplyr::filter(yearly_avgs, pollutant=="PM10"),
+                             aes(colour=conc, geometry=geometry), size=1) +
+  facet_wrap(~ year) +
+  theme_bw() + 
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom") +
+  labs(colour="Average concentration") + 
+  scale_colour_viridis_c() +  ggtitle("PM10")
+
+plot_grid(p1, p2, p3, p4, nrow=2)
+```
+
+## Temporal and spatial variance components 
+
+We fit a LMM to the log(exposure) with a day and station indicator random intercept and
+we extract the temporal and spatial ICC (%) by pollutant.
+
+```{r icc}
+readings_log <- mutate(readings, conc=log(conc))
+
+icc <- function(df){
+  mod <-lmer(conc ~ (1|ID) + (1|date), data = df)
+  res <- tidy(mod) %>%
+    dplyr::filter(effect=="ran_pars") %>%
+    mutate(s2 = estimate^2) 
+  res$ICC <- res$s2/sum(res$s2)*100
+  dplyr::select(res, group, ICC)
+}
+
+# Compute
+no2_icc <- icc(dplyr::filter(readings, pollutant=="NO2"))
+o3_icc <- icc(dplyr::filter(readings, pollutant=="O3"))
+pm25_icc <- icc(dplyr::filter(readings, pollutant=="PM2.5"))
+pm10_icc <- icc(dplyr::filter(readings, pollutant=="PM10"))
+
+# Merge and table
+res_icc <- bind_rows(mutate(no2_icc, pollutant="NO2"), 
+                     mutate(o3_icc, pollutant="O3"), 
+                     mutate(pm25_icc, pollutant="PM2.5"), 
+                     mutate(pm10_icc, pollutant="PM10")) %>%
+  mutate(group = ifelse(group=="date", "temporal", ifelse(group=="ID", "spatial", "residual"))) %>%
+  pivot_wider(names_from = "group", values_from = "ICC")
+
+kable(res_icc, digits=1)
+```
+
+## Time series
+
+Interactive plot: Zoom in and pan to see the detail. Each line is a different
+station.
+
+```{r ts, fig.width=10, fig.height=3}
+readings <- mutate(readings, 
+                   date = as.Date(date),
+                   ID = as.character(ID))
+no2 <- dplyr::filter(readings, pollutant == "NO2") %>%
+  complete(date = seq.Date(min(date), max(date), by="day"),
+           nesting(ID))
+
+# NO2
+no2 <- dplyr::filter(readings, pollutant == "NO2") %>%
+  complete(date = seq.Date(min(date), max(date), by="day"),
+           nesting(ID))
+p1 <- ggplot(no2) + 
+  geom_line(aes(x=date, y=conc, colour=ID)) +
+  ylab("Concentration") +
+  theme_bw() + theme(legend.position = "none") + ggtitle("NO2")
+ggplotly(p1)
+
+# O3
+o3 <- dplyr::filter(readings, pollutant == "O3") %>%
+  complete(date = seq.Date(min(date), max(date), by="day"),
+           nesting(ID))
+p2 <- ggplot(o3) + 
+  geom_line(aes(x=date, y=conc, colour=ID)) +
+  ylab("Concentration") +
+  theme_bw() + theme(legend.position = "none") + ggtitle("O3")
+ggplotly(p2)
+
+# PM10
+pm10 <- dplyr::filter(readings, pollutant == "PM10") %>%
+  complete(date = seq.Date(min(date), max(date), by="day"),
+           nesting(ID))
+p3 <- ggplot(pm10) + 
+  geom_line(aes(x=date, y=conc, colour=ID)) +
+  ylab("Concentration") +
+  theme_bw() + theme(legend.position = "none") + ggtitle("PM10")
+ggplotly(p3)
+
+# PM2.5
+pm25 <- dplyr::filter(readings, pollutant == "PM2.5") %>%
+  complete(date = seq.Date(min(date), max(date), by="day"),
+           nesting(ID))
+p4 <- ggplot(pm25) + 
+  geom_line(aes(x=date, y=conc, colour=ID)) +
+  ylab("Concentration") +
+  theme_bw() + theme(legend.position = "none") + ggtitle("PM2.5")
+ggplotly(p4)
+```
+
+# Temperature
+
+```{r meteo measures}
+# Read station and boundary data
+tar_load("meteo_stations")
+readings <- bind_rows(read_rds(meteo_stations$readings18),
+                      read_rds(meteo_stations$readings19),
+                      read_rds(meteo_stations$readings20))
+stations <- read_rds(meteo_stations$stations)
+```
+
+## Number of stations and measurements
+
+```{r measurement availability temp}
+readings_tab <- readings %>%
+  group_by(ID, entity) %>%
+  summarise(N=n(), .groups = "keep") %>%
+  ungroup() %>%
+  group_by(entity) %>%
+  summarise(`Mean number of days (SD)` = paste0(round(mean(N, 1)), 
+                                                " (", round(sd(N, 1)), ")"),
+            `Number of stations` = n())
+kable(readings_tab)
+```
+
+```{r station types temp, fig.width=4, fig.height=3}
+ggplot() +
+  geom_sf(data=cat, alpha=0.2) +
+  geom_sf(data=stations, aes(colour=entity, geometry=geometry), size=1) +
+  theme_bw() + 
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  scale_colour_colorblind() 
+```
+
+## Yearly averages
+
+```{r yearly avg temp}
+yearly_avgs <- readings %>%
+  mutate(year = year(as.Date(date))) %>%
+  group_by(year, ID) %>%
+  summarise(tavg=mean(tavg, na.rm=T),
+            tmax=mean(tmax, na.rm=T), 
+            tmin=mean(tmin, na.rm=T), .groups="keep") %>%
+  group_by(year) %>%
+  summarise(tavg=mean(tavg, na.rm=T), 
+            tmax=mean(tmax, na.rm=T), 
+            tmin=mean(tmin, na.rm=T), .groups="keep")
+kable(yearly_avgs, digits=1)
+```
+
+```{r yearly maps temp, fig.height=8, fig.width=9}
+yearly_avgs <- readings %>%
+  mutate(year = year(as.Date(date))) %>%
+  group_by(year, ID) %>%
+  summarise(tavg=mean(tavg, na.rm=T),
+            tmax=mean(tmax, na.rm=T), 
+            tmin=mean(tmin, na.rm=T), .groups="keep") 
+yearly_avgs <- left_join(yearly_avgs, stations, by = "ID") %>%
+  pivot_longer(cols=c("tavg", "tmax", "tmin"), names_to = "variable", values_to = "temp")
+
+ggplot() +
+  geom_sf(data=cat, alpha=0.2) +
+  geom_sf(data=yearly_avgs, aes(colour=temp, geometry=geometry), size=1) +
+  facet_grid(variable ~ year) +
+  theme_bw() + 
+  theme(axis.text = element_blank(), axis.ticks = element_blank()) +
+  labs(colour="ºC") + 
+  scale_colour_distiller(palette = "Spectral")
+```
+
+## Temporal and spatial variance components 
+
+We fit a LMM to the exposure with a day and station indicator random intercept and
+we extract the temporal and spatial ICC (%) by pollutant.
+
+```{r icc temp}
+icc <- function(df, out){
+  mod <-lmer(paste0(out, " ~ (1|ID) + (1|date)"), data = df)
+  res <- tidy(mod) %>%
+    dplyr::filter(effect=="ran_pars") %>%
+    mutate(s2 = estimate^2) 
+  res$ICC <- res$s2/sum(res$s2)*100
+  dplyr::select(res, group, ICC)
+}
+
+# Compute
+avg_icc <- icc(readings, "tavg")
+min_icc <- icc(readings, "tmin")
+max_icc <- icc(readings, "tmax")
+
+# Merge and table
+res_icc <- bind_rows(mutate(avg_icc, temp="avg"), 
+                     mutate(min_icc, temp="min"), 
+                     mutate(max_icc, temp="max")) %>%
+  mutate(group = ifelse(group=="date", "temporal", ifelse(group=="ID", "spatial", "residual"))) %>%
+  pivot_wider(names_from = "group", values_from = "ICC")
+
+kable(res_icc, digits=1)
+```
+
+## Time series
+
+Interactive plot: Zoom in and pan to see the detail. Each line is a different
+station.
+
+```{r ts temp, fig.width=10, fig.height=3}
+# tavg
+p1 <- ggplot(readings) +
+  geom_line(aes(x=date, y=tavg, colour=ID)) +
+  ylab("Average temp") +
+  theme_bw() + theme(legend.position = "none")
+ggplotly(p1)
+
+# # tmin
+# p1 <- ggplot(readings) + 
+#   geom_line(aes(x=date, y=tmin, colour=ID)) +
+#   ylab("Minimum temp") +
+#   theme_bw() + theme(legend.position = "none")
+# ggplotly(p1)
+# 
+# # tmax
+# p1 <- ggplot(readings) + 
+#   geom_line(aes(x=date, y=tmax, colour=ID)) +
+#   ylab("Maximum temp") +
+#   theme_bw() + theme(legend.position = "none")
+# ggplotly(p1)
+```
