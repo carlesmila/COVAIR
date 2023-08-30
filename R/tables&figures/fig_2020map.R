@@ -134,5 +134,5 @@ rm("o3_cat", "o3_metro", "expobreaks")
 composite <- tmap_arrange(m1.1, m1.2, m2.1, m2.2, 
                           m3.1, m3.2, m4.1, m4.2, m5.1, m5.2,
                           ncol = 2, nrow = 5, heights = c(0.24, rep(0.19, 4)))
-tmap_save(composite, "figures/manuscript/yearlymap2020.png", width = 9, height = 10)
+tmap_save(composite, "figures/manuscript/yearlymap2020.png", width = 7, height = 9)
 rm(list = ls())
